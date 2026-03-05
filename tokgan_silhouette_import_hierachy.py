@@ -140,30 +140,38 @@ def make_part_layer(obj_name, root_layer):
 
 
 def key_enabled_layer(shape, frames, visibility_data):
+    if not visibility_data:
+        return
     MIN_FRAME: int = 1
-    MAX_FRAME: int = 10001
-    # --- Improved Visibility Logic ---
-    # Instead of just first/last frame, we map all visibility changes
-    all_frames = sorted([int(f) for f in frames.keys()])
     vis_prop = shape.property("opacity")
-    vis_prop.value = 0
     vis_prop.constant = False
     layer_editor = PropertyEditor(vis_prop)
+    # Initial state: Hidden
     layer_editor.setValue(0, MIN_FRAME)
-    if all_frames:
-        # Hide shape by default outside of data range
-        layer_editor.setValue(0, all_frames[0] - 1)
+    # Sort frames to handle them chronologically
+    sorted_frames = sorted([int(f) for f in visibility_data.keys()])
+    
+    # Initial state: Hidden
+    layer_editor.setValue(0, sorted_frames[0] - 1)
 
-        # Set explicit keyframes for visibility from the JSON
-        for frame_str, vis_value in visibility_data.items():
-            frame = int(frame_str)
-            layer_editor.setValue(100 if bool(vis_value) else 0, frame)
-            layer_editor.setValue(0, frame + 1)
+    last_vis = None
 
-        layer_editor.setValue(0, all_frames[-1] + 1)
-    # layer_editor.setValue(0, MAX_FRAME )
+    for frame in sorted_frames:
+        current_vis = bool(visibility_data[str(frame)])
+        
+        # Only set a key if the visibility state has changed
+        if current_vis != last_vis:
+            val = 100 if current_vis else 0
+            
+            # If turning OFF, we want it to stay ON until this frame, 
+            # then go OFF. If turning ON, we want it OFF until now.
+            layer_editor.setValue(val, frame)
+            
+            last_vis = current_vis
+
+    # Ensure it turns off after the last known frame
+    layer_editor.setValue(0, sorted_frames[-1] + 1)
     layer_editor.execute()
-
 
 def inner_loop(obj_name, obj, use_bspline=True):
     root_layer = activeNode()
