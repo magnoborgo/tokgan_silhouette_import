@@ -107,20 +107,23 @@ def import_json_to_silhouette(path, undersample=1, use_bspline=True):
         objects, root_layer, undersample=undersample, use_bspline=use_bspline
     )
 
+
 def formatted_duration(duration: type(datetime.timedelta)):
-    total_seconds = duration.total_seconds
+    total_seconds = duration.total_seconds()
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-    formatted_duration = '{:02.0f}:{:02.0f}:{:02.0f}'.format(hours, minutes, seconds)
+    formatted_duration = "{:02.0f}:{:02.0f}:{:02.0f}".format(
+        hours, minutes, seconds
+    )
     milliseconds = duration.microseconds // 1000
     return f"{formatted_duration}.{milliseconds:03.0f}"
+
 
 def main_loop(objects, root_layer, undersample=1, use_bspline=True):
     start = datetime.datetime.now()
     print(f"Start {start}")
     TOTAL: int = len(objects.keys())
     for count, (obj_name, obj) in enumerate(objects.items(), start=1):
-        loop_start = datetime.datetime.now()
         undo.run(
             inner_loop,
             "Per_animated Shape",
@@ -129,9 +132,9 @@ def main_loop(objects, root_layer, undersample=1, use_bspline=True):
             use_bspline,
             undersample,
         )
-        loop_end = datetime.datetime.now()
-        loop_elapsed = loop_start - loop_start
-        print(f"PROGRESS {float(count/TOTAL)*100.0:02.1f}% {count:%05d} of {TOTAL:%05d}  took {formatted_duration(loop_elapsed)}")
+        print(
+            f"PROGRESS {float(count/TOTAL)*100.0:02.1f}% {count:05d} of {TOTAL:05d}"
+        )
     end = datetime.datetime.now()
 
     elapsed = end - start
@@ -229,7 +232,6 @@ def inner_loop(obj_name, obj, use_bspline=True, undersample=1):
     visibility_data = obj.get("visibility", {})
 
     first_frame = True
-    print(f"Undersample {undersample}")
     all_frames = [int(i) for i in frames.keys()]
     filtered_frames = filter_frames(all_frames, undersample)
 
@@ -295,9 +297,8 @@ class ImportTokganAction(Action):
         stride, ok = QInputDialog.getInt(
             None, "Import Settings", "Undersample Rate:", 1, 1, 100, 1
         )
-        print(f"Undersampling by {stride}!")
-        print(f"Is OK {ok}!")
-        if path:
+        if path and ok:
+            print(f"Loading {path} with undersample value {stride}")
             save_tokgan_dir(QFileInfo(path).dir())
             import_json_to_silhouette(
                 path, use_bspline=True, undersample=stride
@@ -322,9 +323,8 @@ class CreateImportTokganAction(Action):
         stride, ok = QInputDialog.getInt(
             None, "Import Settings", "Undersample Rate:", 1, 1, 100, 1
         )
-        print(f"Undersampling by {stride}!")
-        print(f"Is OK {ok}!")
-        if path:
+        if path and ok:
+            print(f"Loading {path} with undersample value {stride}")
             save_tokgan_dir(QFileInfo(path).dir())
             import_json_to_silhouette(
                 path, use_bspline=True, undersample=stride
