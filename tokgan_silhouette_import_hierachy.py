@@ -1,7 +1,7 @@
 import json
 from fx import *
 from gui import undo
-from PySide2.QtWidgets import QFileDialog
+from PySide2.QtWidgets import QFileDialog, QInputDialog
 from PySide2.QtCore import QSettings
 from PySide2.QtCore import QDir
 from PySide2.QtCore import QFileInfo
@@ -82,7 +82,7 @@ def update_silhouette(path, shape, frame, transformed_points):
     vis_prop.constant = False
 
 
-def import_json_to_silhouette(path, use_bspline=True):
+def import_json_to_silhouette(path, undersample=1, use_bspline=True):
     if not path:
         return
 
@@ -102,13 +102,23 @@ def import_json_to_silhouette(path, use_bspline=True):
     except AssertionError:
         print("Select a RotoNode")
         return
-    main_loop(objects, root_layer, use_bspline)
+    main_loop(
+        objects, root_layer, undersample=undersample, use_bspline=use_bspline
+    )
 
 
-def main_loop(objects, root_layer, use_bspline=True):
+def main_loop(objects, root_layer, undersample=1, use_bspline=True):
+    print(f"Undersampling by {undersample}")
     TOTAL: int = len(objects.keys())
     for count, (obj_name, obj) in enumerate(objects.items(), start=1):
-        undo.run(inner_loop, "Per_animated Shape", obj_name, obj, use_bspline)
+        undo.run(
+            inner_loop,
+            "Per_animated Shape",
+            obj_name,
+            obj,
+            use_bspline,
+            undersample,
+        )
         print(
             ".",
         )
@@ -150,7 +160,7 @@ def key_enabled_layer(shape, frames, visibility_data):
     layer_editor.setValue(0, MIN_FRAME)
     # Sort frames to handle them chronologically
     sorted_frames = sorted([int(f) for f in visibility_data.keys()])
-    
+
     # Initial state: Hidden
     layer_editor.setValue(0, sorted_frames[0] - 1)
 
@@ -158,22 +168,37 @@ def key_enabled_layer(shape, frames, visibility_data):
 
     for frame in sorted_frames:
         current_vis = bool(visibility_data[str(frame)])
-        
+
         # Only set a key if the visibility state has changed
         if current_vis != last_vis:
             val = 100 if current_vis else 0
-            
-            # If turning OFF, we want it to stay ON until this frame, 
+
+            # If turning OFF, we want it to stay ON until this frame,
             # then go OFF. If turning ON, we want it OFF until now.
             layer_editor.setValue(val, frame)
-            
+
             last_vis = current_vis
 
     # Ensure it turns off after the last known frame
     layer_editor.setValue(0, sorted_frames[-1] + 1)
     layer_editor.execute()
 
-def inner_loop(obj_name, obj, use_bspline=True):
+
+def filter_frames(all_frames, nth):
+    if nth <= 1 or len(all_frames) <= 2:
+        return all_frames
+
+    # Get every Nth frame
+    sampled = all_frames[::nth]
+
+    # Ensure the last frame is included if the stride skipped it
+    if all_frames[-1] not in sampled:
+        sampled.append(all_frames[-1])
+
+    return sampled
+
+
+def inner_loop(obj_name, obj, use_bspline=True, undersample=1):
     root_layer = activeNode()
     session = activeSession()
     matrix = session.imageToWorldTransform
@@ -191,9 +216,15 @@ def inner_loop(obj_name, obj, use_bspline=True):
     visibility_data = obj.get("visibility", {})
 
     first_frame = True
+    print(f"Undersample {undersample}")
+    all_frames = [int(i) for i in frames.keys()]
+    filtered_frames = filter_frames(all_frames, undersample)
+
     for frame_str, frame_data in frames.items():
         transformed_points = []
         frame = int(frame_str)
+        if frame not in filtered_frames:
+            continue
 
         pts = frame_data["points"]
         if first_frame:
@@ -248,9 +279,16 @@ class ImportTokganAction(Action):
         path, _ = QFileDialog.getOpenFileName(
             main_window, "Choose Tokgan JSON file", dir, "JSON Files (*.json)"
         )
+        stride, ok = QInputDialog.getInt(
+            None, "Import Settings", "Undersample Rate:", 1, 1, 100, 1
+        )
+        print(f"Undersampling by {stride}!")
+        print(f"Is OK {ok}!")
         if path:
             save_tokgan_dir(QFileInfo(path).dir())
-            undo.run(import_json_to_silhouette, "Import notes", path)
+            import_json_to_silhouette(
+                path, use_bspline=True, undersample=stride
+            )
 
 
 class CreateImportTokganAction(Action):
@@ -268,9 +306,16 @@ class CreateImportTokganAction(Action):
         path, _ = QFileDialog.getOpenFileName(
             main_window, "Choose Tokgan JSON file", dir, "JSON Files (*.json)"
         )
+        stride, ok = QInputDialog.getInt(
+            None, "Import Settings", "Undersample Rate:", 1, 1, 100, 1
+        )
+        print(f"Undersampling by {stride}!")
+        print(f"Is OK {ok}!")
         if path:
             save_tokgan_dir(QFileInfo(path).dir())
-            undo.run(import_json_to_silhouette, "Import notes", path)
+            import_json_to_silhouette(
+                path, use_bspline=True, undersample=stride
+            )
 
 
 if __name__ == "__main__":
