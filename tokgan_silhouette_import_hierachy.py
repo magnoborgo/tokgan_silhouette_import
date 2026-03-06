@@ -7,6 +7,7 @@ from PySide2.QtCore import QDir
 from PySide2.QtCore import QFileInfo
 from tools.window import get_main_window
 import json
+import datetime
 
 
 FINGER_NAMES = ("A_thumb", "B_index", "C_middle", "D_ring", "E_pinky")
@@ -106,11 +107,20 @@ def import_json_to_silhouette(path, undersample=1, use_bspline=True):
         objects, root_layer, undersample=undersample, use_bspline=use_bspline
     )
 
+def formatted_duration(duration: type(datetime.timedelta)):
+    total_seconds = duration.total_seconds
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    formatted_duration = '{:02.0f}:{:02.0f}:{:02.0f}'.format(hours, minutes, seconds)
+    milliseconds = duration.microseconds // 1000
+    return f"{formatted_duration}.{milliseconds:03.0f}"
 
 def main_loop(objects, root_layer, undersample=1, use_bspline=True):
-    print(f"Undersampling by {undersample}")
+    start = datetime.datetime.now()
+    print(f"Start {start}")
     TOTAL: int = len(objects.keys())
     for count, (obj_name, obj) in enumerate(objects.items(), start=1):
+        loop_start = datetime.datetime.now()
         undo.run(
             inner_loop,
             "Per_animated Shape",
@@ -119,10 +129,13 @@ def main_loop(objects, root_layer, undersample=1, use_bspline=True):
             use_bspline,
             undersample,
         )
-        print(
-            ".",
-        )
-        print(f"{float(count/TOTAL)*100.0:02.1f}%")
+        loop_end = datetime.datetime.now()
+        loop_elapsed = loop_start - loop_start
+        print(f"PROGRESS {float(count/TOTAL)*100.0:02.1f}% {count:%05d} of {TOTAL:%05d}  took {formatted_duration(loop_elapsed)}")
+    end = datetime.datetime.now()
+
+    elapsed = end - start
+    print(f"Complete! took {formatted_duration(elapsed)} for {TOTAL} shapes")
 
 
 def make_part_layer(obj_name, root_layer):
